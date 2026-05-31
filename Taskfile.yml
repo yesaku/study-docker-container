@@ -1,0 +1,204 @@
+version: '3'
+
+vars:
+  ENV: '{{.ENV | default "dev"}}'
+  COMPOSE: docker compose -f compose.yaml -f compose.{{.ENV}}.yaml
+
+tasks:
+  # ─── setup ──────────────────────────────────────────────────────
+  setup:
+    desc: "Print first-time setup instructions"
+    cmds:
+      - |
+        echo ""
+        echo "=== First-time Setup ==="
+        echo ""
+        echo "1. task secrets:init"
+        echo "   → age キーペアと app_key を生成"
+        echo ""
+        echo "2. .sops.yaml を編集"
+        echo "   → 表示された公開鍵を dev / prod それぞれに貼り付け"
+        echo ""
+        echo "3. secrets/dev/secrets.yaml を作成して編集"
+        echo "   cp secrets/dev/secrets.yaml.example secrets/dev/secrets.yaml"
+        echo ""
+        echo "4. task secrets:encrypt"
+        echo "   → secrets.enc.yaml を生成 (git にコミット可)"
+        echo ""
+        echo "5. task up"
+        echo ""
+
+  # ─── lifecycle ──────────────────────────────────────────────────
+  up:
+    desc: "Start all services [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} up -d
+
+  down:
+    desc: "Stop all services [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} down
+
+  build:
+    desc: "Build images without cache [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} build --no-cache
+
+  restart:
+    desc: "Restart all services [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} restart
+
+  ps:
+    desc: "Show service status [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} ps
+
+  logs:
+    desc: "Tail logs [ENV=dev|prod] [SVCNAME=<service>]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} logs -f {{.SVCNAME}}
+
+  # ─── reset ──────────────────────────────────────────────────────
+  reset:
+    desc: "Wipe volumes, rebuild and start [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} down -v
+      - task: build
+      - task: up
+
+  clean:
+    desc: "Remove containers, networks, and volumes [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} down -v --remove-orphans
+
+  # ─── db ─────────────────────────────────────────────────────────
+  db:shell:
+    desc: "Open MySQL shell [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec db sh -c 'mysql -u app -p$(cat /run/decrypted/DB_PASSWORD) app_db'
+
+  db:dump:
+    desc: "Dump database to stdout [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec db sh -c 'mysqldump -u app -p$(cat /run/decrypted/DB_PASSWORD) app_db'
+
+  # ─── app ────────────────────────────────────────────────────────
+  app:shell:
+    desc: "Open shell in app container [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec app sh
+
+  # ─── secrets ────────────────────────────────────────────────────
+  secrets:init:
+    desc: "Generate age keypairs for dev/prod and app_key"
+    cmds:
+      - mkdir -p secrets/dev secrets/prod
+      - age-keygen -o secrets/dev/key.txt
+      - age-keygen -o secrets/prod/key.txt
+      - sh -c 'head -c 32 /dev/urandom | base64 > secrets/app_key.txt'
+      - |
+        echo ""
+        echo "=== Dev public key (paste into .sops.yaml) ==="
+        grep "public key" secrets/dev/key.txt
+        echo ""
+        echo "=== Prod public key (paste into .sops.yaml) ==="
+        grep "public key" secrets/prod/key.txt
+        echo ""
+        echo "app_key.txt を生成しました"
+
+  secrets:encrypt:
+    desc: "Encrypt secrets/{{.ENV}}/secrets.yaml → secrets.enc.yaml [ENV=dev|prod]"
+    cmds:
+      - sops -e secrets/{{.ENV}}/secrets.yaml > secrets/{{.ENV}}/secrets.enc.yaml
+      - echo "secrets/{{.ENV}}/secrets.enc.yaml を生成しました (git commit 可)"
+
+  secrets:decrypt:
+    desc: "Decrypt and display secrets [ENV=dev|prod]"
+    cmds:
+      - SOPS_AGE_KEY_FILE=secrets/{{.ENV}}/key.txt sops -d secrets/{{.ENV}}/secrets.enc.yaml
+
+  secrets:edit:
+    desc: "Edit encrypted secrets in-place [ENV=dev|prod]"
+    cmds:
+      - SOPS_AGE_KEY_FILE=secrets/{{.ENV}}/key.txt sops secrets/{{.ENV}}/secrets.enc.yaml
+
+  # ─── api ────────────────────────────────────────────────────────
+  api:health:
+    desc: "GET /health (Docker secrets の確認も含む)"
+    cmds:
+      - curl -s http://localhost:${WEB_PORT:-8080}/health | jq .
+
+  api:list:
+    desc: "GET /todos (2回目以降はValkeyキャッシュから返る)"
+    cmds:
+      - curl -s http://localhost:${WEB_PORT:-8080}/todos | jq .
+
+  api:create:
+    desc: "POST /todos [TITLE='my task']"
+    vars:
+      TITLE: '{{.TITLE | default "sample todo"}}'
+    cmds:
+      - |
+        curl -s -X POST http://localhost:${WEB_PORT:-8080}/todos \
+          -H "Content-Type: application/json" \
+          -d "{\"title\":\"{{.TITLE}}\"}" | jq .
+
+  api:delete:
+    desc: "DELETE /todos/:id [ID=1]"
+    cmds:
+      - curl -s -o /dev/null -w "HTTP %{http_code}\n" -X DELETE http://localhost:${WEB_PORT:-8080}/todos/{{.ID}}
+
+  api:bench:
+    desc: "キャッシュなし vs あり のレスポンス時間を比較"
+    cmds:
+      - |
+        ENV={{.ENV}} {{.COMPOSE}} exec cache valkey-cli DEL todos > /dev/null
+        echo "--- 1回目: DB直接取得 (キャッシュなし) ---"
+        time curl -s http://localhost:${WEB_PORT:-8080}/todos > /dev/null
+        echo "--- 2回目: Valkeyキャッシュ ---"
+        time curl -s http://localhost:${WEB_PORT:-8080}/todos > /dev/null
+
+  # ─── cache ──────────────────────────────────────────────────────
+  cache:keys:
+    desc: "Valkeyの全キーを表示"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec cache valkey-cli KEYS '*'
+
+  cache:get:
+    desc: "Valkeyのキーを取得 [KEY=todos]"
+    vars:
+      KEY: '{{.KEY | default "todos"}}'
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec cache valkey-cli GET {{.KEY}}
+
+  cache:flush:
+    desc: "Valkeyのキャッシュを全削除"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec cache valkey-cli FLUSHALL
+
+  cache:monitor:
+    desc: "Valkeyへのコマンドをリアルタイム監視"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec cache valkey-cli MONITOR
+
+  # ─── inspect ────────────────────────────────────────────────────
+  inspect:networks:
+    desc: "frontendとbackendネットワークの詳細を表示"
+    cmds:
+      - docker network inspect php-todo_frontend php-todo_backend
+
+  inspect:secrets:
+    desc: "コンテナ内のsecrets/decryptedファイルを確認"
+    cmds:
+      - |
+        echo "=== Docker native secret: /run/secrets/app_key ==="
+        ENV={{.ENV}} {{.COMPOSE}} exec app cat /run/secrets/app_key
+        echo ""
+        echo "=== SOPS decrypted: /run/decrypted/DB_PASSWORD ==="
+        ENV={{.ENV}} {{.COMPOSE}} exec app cat /run/decrypted/DB_PASSWORD
+
+  inspect:config:
+    desc: "コンテナにマウントされたnginx.confを確認"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE}} exec web cat /etc/nginx/conf.d/default.conf

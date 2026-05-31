@@ -1,0 +1,38 @@
+services:
+  web:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+
+  app:
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+      PHP_DISPLAY_ERRORS: "0"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 256M
+
+  db:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+  cache:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+
+  sops-init:
+    restart: "no"

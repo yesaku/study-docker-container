@@ -1,0 +1,8 @@
+secrets/dev/key.txt
+secrets/prod/key.txt
+secrets/dev/secrets.yaml
+secrets/prod/secrets.yaml
+secrets/app_key.txt
+.env
+.idea/
+.DS_Store

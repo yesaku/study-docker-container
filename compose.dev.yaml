@@ -1,0 +1,15 @@
+services:
+  app:
+    volumes:
+      - ./app/src:/var/www/html
+    environment:
+      APP_ENV: development
+      PHP_DISPLAY_ERRORS: "1"
+
+  db:
+    ports:
+      - "3306:3306"
+
+  cache:
+    ports:
+      - "6379:6379"

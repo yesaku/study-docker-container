@@ -1,0 +1,7 @@
+creation_rules:
+  - path_regex: secrets/dev/secrets\.yaml$
+    age: >-
+      REPLACE_WITH_DEV_PUBLIC_KEY
+  - path_regex: secrets/prod/secrets\.yaml$
+    age: >-
+      REPLACE_WITH_PROD_PUBLIC_KEY
