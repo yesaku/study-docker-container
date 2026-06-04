@@ -6,11 +6,12 @@ vars:
   ENV: '{{.ENV | default "dev"}}'
   WEB_PORT: '{{.WEB_PORT | default "8080"}}'
   COMPOSE: docker compose -f compose.yaml -f compose.{{.ENV}}.yaml
+  COMPOSE_TEST: docker compose -f compose.yaml -f compose.{{.ENV}}.yaml -f compose.test.yaml
 
 tasks:
   # ─── setup ──────────────────────────────────────────────────────
   env:init:
-    desc: "Create .env from .env.example (already exists: skip)"
+    desc: ".env.example から .env を生成 (既存の場合はスキップ)"
     cmds:
       - |
         if [ -f .env ]; then
@@ -21,7 +22,7 @@ tasks:
         fi
 
   setup:
-    desc: "First-time setup: .env 生成 → 手順表示"
+    desc: "初回セットアップ: .env 生成 → 手順表示"
     cmds:
       - task: env:init
       - |
@@ -45,68 +46,99 @@ tasks:
 
   # ─── lifecycle ──────────────────────────────────────────────────
   up:
-    desc: "Start all services [ENV=dev|prod]"
+    desc: "サービスを起動する [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} up -d
 
   down:
-    desc: "Stop all services [ENV=dev|prod]"
+    desc: "サービスを停止する [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} down
 
   build:
-    desc: "Build images without cache [ENV=dev|prod]"
+    desc: "イメージをキャッシュなしでビルドする [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} build --no-cache
 
   restart:
-    desc: "Restart all services [ENV=dev|prod]"
+    desc: "全サービスを再起動する [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} restart
 
+  # ─── test ───────────────────────────────────────────────────────
+  test:build:
+    desc: "テストイメージをビルド"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE_TEST}} build test test-isolation
+
+  test:
+    desc: "テストを実行 (task up が必要) [ENV=dev|prod]"
+    cmds:
+      - ENV={{.ENV}} {{.COMPOSE_TEST}} run --rm test
+      - ENV={{.ENV}} {{.COMPOSE_TEST}} run --rm test-isolation
+
+  test:all:
+    desc: "dev と prod の両環境でテストを実行 (prod secrets が必要)"
+    cmds:
+      - echo "=== dev ==="
+      - task: up
+        vars: { ENV: dev }
+      - task: test
+        vars: { ENV: dev }
+      - task: down
+        vars: { ENV: dev }
+      - echo "=== prod ==="
+      - task: up
+        vars: { ENV: prod }
+      - task: test
+        vars: { ENV: prod }
+      - task: down
+        vars: { ENV: prod }
+
+  # ─── lifecycle ──────────────────────────────────────────────────
   ps:
-    desc: "Show service status [ENV=dev|prod]"
+    desc: "サービスの状態を表示する [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} ps
 
   logs:
-    desc: "Tail logs [ENV=dev|prod] [SVCNAME=<service>]"
+    desc: "ログを追跡する [ENV=dev|prod] [SVCNAME=<service>]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} logs -f {{.SVCNAME}}
 
   # ─── reset ──────────────────────────────────────────────────────
   reset:
-    desc: "Wipe volumes, rebuild and start [ENV=dev|prod]"
+    desc: "ボリュームを削除して再ビルド・起動する [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} down -v
       - task: build
       - task: up
 
   clean:
-    desc: "Remove containers, networks, and volumes [ENV=dev|prod]"
+    desc: "コンテナ・ネットワーク・ボリュームを全て削除する [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} down -v --remove-orphans
 
   # ─── db ─────────────────────────────────────────────────────────
   db:shell:
-    desc: "Open MySQL shell [ENV=dev|prod]"
+    desc: "MySQL シェルを開く [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} exec db sh -c 'mysql -u app -p$(cat /run/decrypted/DB_PASSWORD) app_db'
 
   db:dump:
-    desc: "Dump database to stdout [ENV=dev|prod]"
+    desc: "DB を標準出力にダンプする [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} exec db sh -c 'mysqldump -u app -p$(cat /run/decrypted/DB_PASSWORD) app_db'
 
   # ─── app ────────────────────────────────────────────────────────
   app:shell:
-    desc: "Open shell in app container [ENV=dev|prod]"
+    desc: "app コンテナのシェルを開く [ENV=dev|prod]"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} exec app sh
 
   # ─── secrets ────────────────────────────────────────────────────
   secrets:init:
-    desc: "Generate age keypairs for dev/prod and app_key"
+    desc: "dev/prod の age キーペアと app_key を生成する"
     cmds:
       - mkdir -p secrets/dev secrets/prod
       - age-keygen -o secrets/dev/key.txt
@@ -123,18 +155,18 @@ tasks:
         echo "app_key.txt を生成しました"
 
   secrets:encrypt:
-    desc: "Encrypt secrets/{{.ENV}}/secrets.yaml → secrets.enc.yaml [ENV=dev|prod]"
+    desc: "secrets.yaml を暗号化して secrets.enc.yaml を生成する [ENV=dev|prod]"
     cmds:
       - sops -e secrets/{{.ENV}}/secrets.yaml > secrets/{{.ENV}}/secrets.enc.yaml
       - echo "secrets/{{.ENV}}/secrets.enc.yaml を生成しました (git commit 可)"
 
   secrets:decrypt:
-    desc: "Decrypt and display secrets [ENV=dev|prod]"
+    desc: "シークレットを復号して表示する [ENV=dev|prod]"
     cmds:
       - SOPS_AGE_KEY_FILE=secrets/{{.ENV}}/key.txt sops -d secrets/{{.ENV}}/secrets.enc.yaml
 
   secrets:edit:
-    desc: "Edit encrypted secrets in-place [ENV=dev|prod]"
+    desc: "暗号化ファイルをエディタで直接編集する [ENV=dev|prod]"
     cmds:
       - SOPS_AGE_KEY_FILE=secrets/{{.ENV}}/key.txt sops secrets/{{.ENV}}/secrets.enc.yaml
 
@@ -150,7 +182,7 @@ tasks:
       - curl -s http://localhost:{{.WEB_PORT}}/todos | jq .
 
   api:create:
-    desc: "POST /todos [TITLE='my task']"
+    desc: "Todo を作成する [TITLE='タスク名']"
     vars:
       TITLE: '{{.TITLE | default "sample todo"}}'
     cmds:
@@ -160,7 +192,7 @@ tasks:
           -d "{\"title\":\"{{.TITLE}}\"}" | jq .
 
   api:delete:
-    desc: "DELETE /todos/:id [ID=1]"
+    desc: "Todo を削除する [ID=1]"
     cmds:
       - curl -s -o /dev/null -w "HTTP %{http_code}\n" -X DELETE http://localhost:{{.WEB_PORT}}/todos/{{.ID}}
 

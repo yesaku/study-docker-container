@@ -1,4 +1,4 @@
-FROM alpine:3.21
+FROM alpine:3.23
 
 ARG SOPS_VERSION=3.9.4
 

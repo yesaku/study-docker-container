@@ -23,6 +23,19 @@
 
 ---
 
+## テスト
+
+> 前提: `task secrets:init` でキーを生成済み、`task up` でサービスが起動済みであること
+
+| タスク | 説明 |
+|--------|------|
+| `task test:build` | テストイメージをビルド |
+| `task test` | テストを実行 (現在の ENV) |
+| `task test ENV=prod` | prod 環境でテストを実行 |
+| `task test:all` | dev → prod の順に両環境でテストを実行 |
+
+---
+
 ## API
 
 | タスク | 説明 |

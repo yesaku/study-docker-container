@@ -1,0 +1,35 @@
+services:
+  # 全ネットワーク: connectivity / secrets / api テスト
+  test:
+    build:
+      context: ./tests
+    volumes:
+      - ./tests/bats:/tests:ro
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      app:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    command:
+      - /tests/connectivity.bats
+      - /tests/secrets.bats
+      - /tests/api.bats
+
+  # frontend のみ: ネットワーク分離テスト
+  test-isolation:
+    build:
+      context: ./tests
+    volumes:
+      - ./tests/bats:/tests:ro
+    networks:
+      - frontend
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      - /tests/isolation.bats
