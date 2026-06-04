@@ -21,6 +21,18 @@ brew install go-task age sops jq
 
 ## 手順
 
+### 0. .env を生成
+
+```bash
+task setup   # .env の生成 + 以降の手順を表示
+```
+
+`WEB_PORT` (デフォルト: 8080) が他のプロセスと競合する場合は `.env` を編集:
+
+```bash
+WEB_PORT=8081
+```
+
 ### 1. age キーペアと app_key を生成
 
 ```bash

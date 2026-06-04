@@ -37,7 +37,7 @@ real    0m0.004s
 task cache:keys
 # → todos
 
-task cache:get KEY=todos
+task api:bench
 # → [{"id":1,"title":"sample todo","done":false}]
 ```
 

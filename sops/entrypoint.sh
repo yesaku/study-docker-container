@@ -11,7 +11,7 @@ while IFS= read -r line; do
     key="${line%%=*}"
     value="${line#*=}"
     printf '%s' "$value" > "/run/output/${key}"
-    chmod 600 "/run/output/${key}"
+    chmod 644 "/run/output/${key}"
 done < /tmp/decrypted.env
 
 rm /tmp/decrypted.env

@@ -13,19 +13,23 @@ task inspect:networks
 注目する箇所:
 
 ```json
-"php-todo_frontend": {
-  "Containers": {
-    "web":  { "IPv4Address": "172.x.0.2/16" },
-    "app":  { "IPv4Address": "172.x.0.3/16" }
+[
+  {
+    "Name": "php-todo_frontend",
+    "Containers": {
+      "<container-id>": { "Name": "php-todo-app-1", "IPv4Address": "172.x.0.x/16" },
+      "<container-id>": { "Name": "php-todo-web-1", "IPv4Address": "172.x.0.x/16" }
+    }
+  },
+  {
+    "Name": "php-todo_backend",
+    "Containers": {
+      "<container-id>": { "Name": "php-todo-cache-1", "IPv4Address": "172.y.0.x/16" },
+      "<container-id>": { "Name": "php-todo-db-1",    "IPv4Address": "172.y.0.x/16" },
+      "<container-id>": { "Name": "php-todo-app-1",   "IPv4Address": "172.y.0.x/16" }
+    }
   }
-},
-"php-todo_backend": {
-  "Containers": {
-    "app":   { "IPv4Address": "172.y.0.2/16" },
-    "db":    { "IPv4Address": "172.y.0.3/16" },
-    "cache": { "IPv4Address": "172.y.0.4/16" }
-  }
-}
+]
 ```
 
 `app` だけが両方のネットワークに属している。
@@ -43,7 +47,7 @@ docker compose exec web sh -c "nc -zv db 3306 2>&1"
 期待する出力:
 
 ```
-nc: getaddrinfo for host "db" port 3306: Name does not resolve
+nc: bad address 'db'
 ```
 
 `web` は `frontend` ネットワークのみに属するため、`backend` にある `db` を名前解決できない。
@@ -57,7 +61,7 @@ docker compose exec app sh -c "nc -zv db 3306 2>&1"
 期待する出力:
 
 ```
-db (172.y.0.3:3306) open
+Connection to db (172.y.0.x) 3306 port [tcp/mysql] succeeded!
 ```
 
 `app` は両ネットワークに属するため到達できる。
@@ -69,7 +73,7 @@ docker compose exec app sh -c "nc -zv cache 6379 2>&1"
 ```
 
 ```
-cache (172.y.0.4:6379) open
+Connection to cache (172.y.0.x) 6379 port [tcp/redis] succeeded!
 ```
 
 ---

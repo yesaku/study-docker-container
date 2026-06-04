@@ -9,7 +9,7 @@
 ### データを作成してコンテナを再起動する
 
 ```bash
-# Todo を作成
+# to do を作成
 task api:create TITLE="永続化テスト"
 task api:list
 # → "永続化テスト" が返る

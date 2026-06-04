@@ -101,7 +101,7 @@ task ps                 # 全サービスが healthy になるまで待つ
 | [Lab 3: ボリューム](docs/lab-03-volumes.md) | データ永続化・dev bind mount |
 | [Lab 4: Configs](docs/lab-04-configs.md) | nginx.conf の注入 |
 | [Lab 5: Docker Secrets](docs/lab-05-docker-secrets.md) | native secrets の仕組み |
-| [Lab 6: SOPS](docs/lab-06-sops.md) | サイドカーで暗号化シークレットを渡す |
+| [Lab 6: SOPS](docs/lab-06-sops.md) | init container で暗号化シークレットを渡す |
 | [Lab 7: Valkey](docs/lab-07-valkey.md) | キャッシュのヒット/ミス検証 |
 | [Lab 8: API](docs/lab-08-api.md) | Task を使った API 操作 |
 | [Lab 9: dev / prod](docs/lab-09-dev-prod.md) | 環境切り替えの違い |

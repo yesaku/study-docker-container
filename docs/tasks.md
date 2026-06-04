@@ -8,7 +8,8 @@
 
 | タスク | 説明 |
 |--------|------|
-| `task setup` | 初回セットアップ手順を表示 |
+| `task env:init` | `.env.example` から `.env` を生成 (既存の場合はスキップ) |
+| `task setup` | `.env` 生成 → 初回セットアップ手順を表示 |
 | `task up` | サービス起動 (dev) |
 | `task up ENV=prod` | サービス起動 (prod) |
 | `task down` | サービス停止 |

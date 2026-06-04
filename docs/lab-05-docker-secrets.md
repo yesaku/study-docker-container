@@ -74,7 +74,7 @@ services:
 
 ## SOPS secrets との使い分け
 
-| | Docker native secrets | SOPS + sidecar |
+| | Docker native secrets | SOPS + init container  |
 |-|-----------------------|----------------|
 | ファイル管理 | 平文ファイル (git 非管理) | 暗号化ファイル (git 管理 OK) |
 | 鍵管理 | 不要 | age / KMS 等 |
@@ -83,4 +83,4 @@ services:
 
 このプロジェクトでは両方を使って学習できる:
 - `app_key.txt` → Docker native secrets
-- `DB_PASSWORD` → SOPS サイドカー ([Lab 6](lab-06-sops.md) 参照)
+- `DB_PASSWORD` → SOPS init container ([Lab 6](lab-06-sops.md) 参照)

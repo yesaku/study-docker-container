@@ -1,14 +1,29 @@
 version: '3'
 
+dotenv: ['.env']
+
 vars:
   ENV: '{{.ENV | default "dev"}}'
+  WEB_PORT: '{{.WEB_PORT | default "8080"}}'
   COMPOSE: docker compose -f compose.yaml -f compose.{{.ENV}}.yaml
 
 tasks:
   # ─── setup ──────────────────────────────────────────────────────
-  setup:
-    desc: "Print first-time setup instructions"
+  env:init:
+    desc: "Create .env from .env.example (already exists: skip)"
     cmds:
+      - |
+        if [ -f .env ]; then
+          echo ".env already exists, skipping"
+        else
+          cp .env.example .env
+          echo ".env を作成しました。必要に応じて WEB_PORT 等を編集してください"
+        fi
+
+  setup:
+    desc: "First-time setup: .env 生成 → 手順表示"
+    cmds:
+      - task: env:init
       - |
         echo ""
         echo "=== First-time Setup ==="
@@ -127,12 +142,12 @@ tasks:
   api:health:
     desc: "GET /health (Docker secrets の確認も含む)"
     cmds:
-      - curl -s http://localhost:${WEB_PORT:-8080}/health | jq .
+      - curl -s http://localhost:{{.WEB_PORT}}/health | jq .
 
   api:list:
     desc: "GET /todos (2回目以降はValkeyキャッシュから返る)"
     cmds:
-      - curl -s http://localhost:${WEB_PORT:-8080}/todos | jq .
+      - curl -s http://localhost:{{.WEB_PORT}}/todos | jq .
 
   api:create:
     desc: "POST /todos [TITLE='my task']"
@@ -140,14 +155,14 @@ tasks:
       TITLE: '{{.TITLE | default "sample todo"}}'
     cmds:
       - |
-        curl -s -X POST http://localhost:${WEB_PORT:-8080}/todos \
+        curl -s -X POST http://localhost:{{.WEB_PORT}}/todos \
           -H "Content-Type: application/json" \
           -d "{\"title\":\"{{.TITLE}}\"}" | jq .
 
   api:delete:
     desc: "DELETE /todos/:id [ID=1]"
     cmds:
-      - curl -s -o /dev/null -w "HTTP %{http_code}\n" -X DELETE http://localhost:${WEB_PORT:-8080}/todos/{{.ID}}
+      - curl -s -o /dev/null -w "HTTP %{http_code}\n" -X DELETE http://localhost:{{.WEB_PORT}}/todos/{{.ID}}
 
   api:bench:
     desc: "キャッシュなし vs あり のレスポンス時間を比較"
@@ -155,9 +170,9 @@ tasks:
       - |
         ENV={{.ENV}} {{.COMPOSE}} exec cache valkey-cli DEL todos > /dev/null
         echo "--- 1回目: DB直接取得 (キャッシュなし) ---"
-        time curl -s http://localhost:${WEB_PORT:-8080}/todos > /dev/null
+        time curl -s http://localhost:{{.WEB_PORT}}/todos > /dev/null
         echo "--- 2回目: Valkeyキャッシュ ---"
-        time curl -s http://localhost:${WEB_PORT:-8080}/todos > /dev/null
+        time curl -s http://localhost:{{.WEB_PORT}}/todos > /dev/null
 
   # ─── cache ──────────────────────────────────────────────────────
   cache:keys:

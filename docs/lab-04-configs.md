@@ -72,6 +72,7 @@ configs は再起動時に再読み込みされる:
 task restart
 curl -si http://localhost:8080/health | grep X-Powered-By
 # → X-Powered-By: php-todo-handson
+# portはWEB_PORTに直してください。
 ```
 
 変更後は元に戻しておく。

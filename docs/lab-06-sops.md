@@ -1,4 +1,4 @@
-# Lab 6 — SOPS サイドカー
+# Lab 6 — SOPS init container
 
 **学ぶこと**: init container パターンで暗号化シークレットをコンテナに安全に渡す
 
@@ -41,8 +41,8 @@ sops:
           enc: |
               -----BEGIN AGE ENCRYPTED FILE-----
               ...
-    lastmodified: "2025-01-01T00:00:00Z"
-    version: 3.9.4
+    lastmodified: "2026-05-01T00:00:00Z"
+    version:  3.13.1
 ```
 
 平文は一切含まれていない。このファイルは git にコミットしてよい。

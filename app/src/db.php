@@ -10,7 +10,7 @@ function db(): PDO
         return $pdo;
     }
 
-    // SOPS sidecar が tmpfs volume に書き込んだファイルから読む
+    // SOPS init container が tmpfs volume に書き込んだファイルから読む
     $password = trim(file_get_contents('/run/decrypted/DB_PASSWORD'));
 
     $dsn = sprintf(

@@ -66,7 +66,10 @@ docker compose exec app nc -zv localhost 9000
 
 # MySQL が応答するか
 docker compose exec db mysqladmin ping -h localhost
-# → mysqld is alive
+# → mysqld is alive  (または Access denied)
+# ※ "Access denied" はサーバーがネットワーク接続に応答した証拠
+#    ヘルスチェックの目的は「疎通確認」なので Access denied = 正常とみなしてよい
+#    コンテナ未起動やネットワーク断の場合は "Connection refused" になり exit 1 で検知できる
 
 # Valkey が応答するか
 docker compose exec cache valkey-cli ping
