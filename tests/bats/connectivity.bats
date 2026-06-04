@@ -11,7 +11,7 @@ load 'helpers/common'
 }
 
 @test "nginx のバージョンがレスポンスヘッダーに露出していない" {
-  run sh -c "curl -sI http://web/health | grep -i '^server:'"
+  run sh -c "curl -sI http://web/health | grep -i '^server:' | tr -d '\r'"
   assert_output "Server: nginx"
   refute_output --partial "nginx/1."
 }

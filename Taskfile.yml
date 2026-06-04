@@ -47,6 +47,11 @@ tasks:
   # ─── lifecycle ──────────────────────────────────────────────────
   up:
     desc: "サービスを起動する [ENV=dev|prod]"
+    preconditions:
+      - sh: test -f secrets/{{.ENV}}/secrets.enc.yaml
+        msg: "secrets/{{.ENV}}/secrets.enc.yaml が見つかりません。task secrets:encrypt ENV={{.ENV}} を先に実行してください"
+      - sh: test -f secrets/app_key.txt
+        msg: "secrets/app_key.txt が見つかりません。task secrets:init を先に実行してください"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE}} up -d
 
@@ -66,14 +71,41 @@ tasks:
       - ENV={{.ENV}} {{.COMPOSE}} restart
 
   # ─── test ───────────────────────────────────────────────────────
+  test:prepare:
+    desc: "テストの事前準備を自動化する (冪等)"
+    cmds:
+      - |
+        # age キーが未生成なら既存の secrets:init を使う
+        if [ ! -f secrets/dev/key.txt ] || [ ! -f secrets/prod/key.txt ]; then
+          task secrets:init
+        fi
+      - |
+        # secrets.yaml が未作成なら example からコピー
+        for env in dev prod; do
+          if [ ! -f secrets/${env}/secrets.yaml ]; then
+            cp secrets/${env}/secrets.yaml.example secrets/${env}/secrets.yaml
+            echo "secrets/${env}/secrets.yaml を作成しました"
+          fi
+        done
+      - |
+        # secrets.enc.yaml が未作成なら既存の secrets:encrypt を使う
+        for env in dev prod; do
+          if [ ! -f secrets/${env}/secrets.enc.yaml ]; then
+            task secrets:encrypt ENV=${env}
+          fi
+        done
+      - task: down
+      - task: up
+
   test:build:
     desc: "テストイメージをビルド"
     cmds:
       - ENV={{.ENV}} {{.COMPOSE_TEST}} build test test-isolation
 
   test:
-    desc: "テストを実行 (task up が必要) [ENV=dev|prod]"
+    desc: "テストを実行する (事前準備も自動で行う) [ENV=dev|prod]"
     cmds:
+      - task: test:prepare
       - ENV={{.ENV}} {{.COMPOSE_TEST}} run --rm test
       - ENV={{.ENV}} {{.COMPOSE_TEST}} run --rm test-isolation
 
@@ -138,27 +170,34 @@ tasks:
 
   # ─── secrets ────────────────────────────────────────────────────
   secrets:init:
-    desc: "dev/prod の age キーペアと app_key を生成する"
+    desc: "dev/prod の age キーペアと app_key を生成し .sops.yaml を自動更新する"
     cmds:
       - mkdir -p secrets/dev secrets/prod
       - age-keygen -o secrets/dev/key.txt
       - age-keygen -o secrets/prod/key.txt
       - sh -c 'head -c 32 /dev/urandom | base64 > secrets/app_key.txt'
       - |
-        echo ""
-        echo "=== Dev public key (paste into .sops.yaml) ==="
-        grep "public key" secrets/dev/key.txt
-        echo ""
-        echo "=== Prod public key (paste into .sops.yaml) ==="
-        grep "public key" secrets/prod/key.txt
-        echo ""
+        dev_key=$(grep "^# public key:" secrets/dev/key.txt | cut -d' ' -f4)
+        prod_key=$(grep "^# public key:" secrets/prod/key.txt | cut -d' ' -f4)
+        cat > .sops.yaml << SOPS_EOF
+        creation_rules:
+          - path_regex: secrets/dev/secrets\\.yaml\$
+            age: >-
+              ${dev_key}
+          - path_regex: secrets/prod/secrets\\.yaml\$
+            age: >-
+              ${prod_key}
+        SOPS_EOF
+        echo ".sops.yaml を更新しました"
+        echo "dev  公開鍵: ${dev_key}"
+        echo "prod 公開鍵: ${prod_key}"
         echo "app_key.txt を生成しました"
 
   secrets:encrypt:
     desc: "secrets.yaml を暗号化して secrets.enc.yaml を生成する [ENV=dev|prod]"
     cmds:
       - sops -e secrets/{{.ENV}}/secrets.yaml > secrets/{{.ENV}}/secrets.enc.yaml
-      - echo "secrets/{{.ENV}}/secrets.enc.yaml を生成しました (git commit 可)"
+      - echo "secrets/{{.ENV}}/secrets.enc.yaml を生成しました"
 
   secrets:decrypt:
     desc: "シークレットを復号して表示する [ENV=dev|prod]"
